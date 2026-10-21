@@ -211,11 +211,107 @@ class _CostingHomeScreenState extends State<CostingHomeScreen> {
           const SizedBox(width: 8),
           Expanded(child: Text(
               p.sellingPrice <= 0 ? 'Enter a selling price to calculate GP' :
-              good ? 'Target achieved · ${marginText(p.targetMargin)}' :
+              good ? 'At or above target · ${marginText(p.targetMargin)}' :
               'Target ${marginText(p.targetMargin)} · Reduce costs by ${rand(p.reductionRequired)} / unit',
               style: const TextStyle(color: Colors.white, fontSize: 13))),
         ]),
       ]),
+    );
+  }
+
+  /// Always show guidance for the selected target, even when current GP is
+  /// already greater than 30/40/50%. This is advisory; no costs are edited.
+  Widget _targetAdviceCard(CostingProject p) {
+    final hasPrice = p.sellingPrice > 0;
+    final hasCosts = p.costs.isNotEmpty && p.costPerUnit > 0;
+    final shortfall = p.reductionRequired > 0.005;
+    final headroom = p.availableCostHeadroom > 0.005;
+
+    Widget numberRow(String label, String value) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: Text(label,
+            style: const TextStyle(fontSize: 12, color: Color(0xFF5E686B)))),
+        const SizedBox(width: 10),
+        Text(value, style: const TextStyle(
+            fontSize: 13, fontWeight: FontWeight.w800)),
+      ]),
+    );
+
+    final title = !hasPrice ? 'Enter a selling price' :
+        !hasCosts ? 'Add your production costs' :
+        shortfall ? 'A cost adjustment is needed' :
+        headroom ? 'You are above your GP target' :
+        'You are on your GP target';
+
+    String explanation;
+    if (!hasPrice) {
+      explanation = 'Set the unit selling price above to calculate the '
+          'maximum cost allowed for your selected GP target.';
+    } else if (!hasCosts) {
+      explanation = 'Add cost items to receive realistic suggestions. '
+          'A zero-cost product gives a misleading GP margin.';
+    } else if (shortfall) {
+      explanation = 'To reach ${marginText(p.targetMargin)} while keeping '
+          'the selling price at ${rand(p.sellingPrice)}, reduce production '
+          'costs by ${rand(p.reductionRequired)} per unit '
+          '(${rand(p.projectReductionRequired)} for ${p.quantity} units). '
+          'Alternatively, raise the selling price by '
+          '${rand(p.priceIncreaseRequired)} to at least '
+          '${rand(p.requiredSellingPrice)} per unit.';
+    } else if (headroom) {
+      explanation = 'Your current GP is ${marginText(p.gpMargin)}, which is '
+          '${p.marginDifference.toStringAsFixed(2)} percentage points above '
+          'your ${marginText(p.targetMargin)} target. You can accommodate '
+          'up to ${rand(p.availableCostHeadroom)} MORE production cost per '
+          'unit (${rand(p.availableProjectHeadroom)} overall) before falling '
+          'below the target. Or, keeping costs fixed, you could reduce your '
+          'selling price to ${rand(p.requiredSellingPrice)} per unit. '
+          'Neither adjustment is required.';
+    } else {
+      explanation = 'Your existing costs and selling price already produce '
+          'the selected ${marginText(p.targetMargin)} GP target. There is '
+          'no extra cost allowance at this price.';
+    }
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(shortfall ? Icons.tune_outlined : Icons.lightbulb_outline,
+                size: 20, color: const Color(0xFF327783)),
+            const SizedBox(width: 8),
+            Expanded(child: Text('GP TARGET GUIDANCE · '
+                '${marginText(p.targetMargin)}',
+                style: const TextStyle(fontSize: 12,
+                    fontWeight: FontWeight.w800))),
+          ]),
+          const SizedBox(height: 8),
+          Text(title, style: const TextStyle(
+              fontWeight: FontWeight.w800, fontSize: 16)),
+          const SizedBox(height: 7),
+          Text(explanation, style: const TextStyle(fontSize: 13, height: 1.5)),
+          if (hasPrice && hasCosts) ...[
+            const Divider(height: 22),
+            numberRow('Current cost per unit', rand(p.costPerUnit)),
+            numberRow('Maximum cost at ${marginText(p.targetMargin)} GP',
+                rand(p.maximumCostForTarget)),
+            numberRow(shortfall ? 'Cost reduction required / unit' :
+                'Extra cost allowance / unit',
+                rand(shortfall ? p.reductionRequired : p.availableCostHeadroom)),
+            numberRow('Selling price for target GP',
+                p.requiredSellingPrice.isFinite
+                    ? rand(p.requiredSellingPrice) : 'N/A'),
+            const SizedBox(height: 8),
+            const Text('These are budget comparisons, not automatic changes. '
+                'Edit individual cost items below to test your figures.',
+                style: TextStyle(fontSize: 11,
+                    color: Color(0xFF626D70), height: 1.5)),
+          ],
+        ]),
+      ),
     );
   }
 
@@ -408,6 +504,8 @@ class _CostingHomeScreenState extends State<CostingHomeScreen> {
             _targetSelector(p),
             const SizedBox(height: 22),
             _overviewCard(p),
+            const SizedBox(height: 12),
+            _targetAdviceCard(p),
             const SizedBox(height: 18),
             _sectionHeader('Cost breakdown', 'Tap a section to edit unit costs.'),
             _costGroups(p),
@@ -435,10 +533,12 @@ class _CostingHomeScreenState extends State<CostingHomeScreen> {
                 const SizedBox(width: 16),
                 Expanded(child: _metric('Target maximum cost', rand(p.maximumCostForTarget))),
               ]),
-              if (!p.targetMet && p.sellingPrice > 0) ...[
+              if (p.sellingPrice > 0 && p.costPerUnit > 0) ...[
                 const Divider(height: 28),
                 Align(alignment: Alignment.centerLeft,
-                  child: Text('To achieve ${marginText(p.targetMargin)} at these costs, the selling price would need to be ${rand(p.requiredSellingPrice)} per unit. Alternatively reduce unit costs by ${rand(p.reductionRequired)}.',
+                  child: Text(p.reductionRequired > 0.005
+                      ? 'To reach the selected margin, reduce unit costs by ${rand(p.reductionRequired)} or increase unit selling price to ${rand(p.requiredSellingPrice)}.'
+                      : 'Additional cost budget available per unit while maintaining the selected margin: ${rand(p.availableCostHeadroom)}. No changes are required.',
                     style: const TextStyle(fontSize: 12, height: 1.5))),
               ],
             ]))),

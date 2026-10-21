@@ -92,6 +92,9 @@ class CostingExport {
       ['Target met?', project.targetMet ? 'Yes' : 'No'],
       ['Maximum cost per unit at target (ZAR)', _number(project.maximumCostForTarget)],
       ['Cost reduction needed per unit (ZAR)', _number(project.reductionRequired)],
+      ['Total project cost reduction needed (ZAR)', _number(project.projectReductionRequired)],
+      ['Additional cost allowance per unit (ZAR)', _number(project.availableCostHeadroom)],
+      ['Additional project cost allowance (ZAR)', _number(project.availableProjectHeadroom)],
       ['Required selling price at target (ZAR)',
         project.requiredSellingPrice.isFinite ? _number(project.requiredSellingPrice) : 'N/A'],
       [],
@@ -281,6 +284,8 @@ class CostingExport {
             labelledValue('Target achieved', project.targetMet ? 'Yes' : 'No'),
             labelledValue('Maximum unit cost at target', money(project.maximumCostForTarget)),
             labelledValue('Cost reduction required per unit', money(project.reductionRequired)),
+            labelledValue('Additional cost allowance per unit', money(project.availableCostHeadroom)),
+            labelledValue('Additional project cost allowance', money(project.availableProjectHeadroom)),
             labelledValue('Required selling price at target',
                 project.requiredSellingPrice.isFinite
                     ? money(project.requiredSellingPrice) : 'N/A'),

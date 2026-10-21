@@ -37,6 +37,35 @@ void main() {
     expect(p.maximumCostForTarget, closeTo(50, 1e-6));
     expect(p.reductionRequired, closeTo(20, 1e-6));
   });
+  test('GP remains unchanged when target changes; guidance updates', () {
+    final p = example(); // Selling R100, costs R70, GP 30%
+    p.targetMargin = 20;
+    expect(p.gpMargin, closeTo(30, 1e-6));
+    expect(p.availableCostHeadroom, closeTo(10, 1e-6));
+    expect(p.availableProjectHeadroom, closeTo(1000, 1e-6));
+    expect(p.possiblePriceDecrease, closeTo(12.5, 1e-6));
+    expect(p.reductionRequired, 0);
+
+    p.targetMargin = 40;
+    expect(p.gpMargin, closeTo(30, 1e-6));
+    expect(p.availableCostHeadroom, 0);
+    expect(p.reductionRequired, closeTo(10, 1e-6));
+    expect(p.projectReductionRequired, closeTo(1000, 1e-6));
+    expect(p.priceIncreaseRequired, closeTo(100 / 6, 1e-6));
+  });
+  test('At exact GP target no headroom and no reduction', () {
+    final p = example();
+    expect(p.availableCostHeadroom, 0);
+    expect(p.reductionRequired, 0);
+    expect(p.marginDifference, closeTo(0, 1e-6));
+  });
+  test('Blank prices do not produce adjustment recommendations', () {
+    final p = example()..sellingPrice = 0;
+    expect(p.reductionRequired, 0);
+    expect(p.availableCostHeadroom, 0);
+    expect(p.priceIncreaseRequired, 0);
+    expect(p.possiblePriceDecrease, 0);
+  });
   test('Zero selling price avoids division by zero', () {
     final p = example()..sellingPrice = 0;
     expect(p.gpMargin, 0);

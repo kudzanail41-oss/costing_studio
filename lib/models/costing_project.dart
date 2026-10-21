@@ -62,9 +62,26 @@ class CostingProject {
   double get projectProfit => revenue - projectCost;
   double get gpMargin => sellingPrice <= 0 ? 0 : profitPerUnit / sellingPrice * 100;
   double get maximumCostForTarget => sellingPrice * (1 - targetMargin / 100);
-  double get reductionRequired => math.max(0, costPerUnit - maximumCostForTarget);
+  /// Money available for extra production costs per unit while maintaining
+  /// at least the selected GP target. Never changes the entered cost lines.
+  double get availableCostHeadroom =>
+      sellingPrice <= 0 ? 0 : math.max(0, maximumCostForTarget - costPerUnit);
+  double get availableProjectHeadroom => availableCostHeadroom * quantity;
+  double get reductionRequired =>
+      sellingPrice <= 0 ? 0 : math.max(0, costPerUnit - maximumCostForTarget);
+  double get projectReductionRequired => reductionRequired * quantity;
   double get requiredSellingPrice =>
       targetMargin >= 100 ? double.infinity : costPerUnit / (1 - targetMargin / 100);
+  /// If current GP is below target, the extra selling price needed per unit.
+  double get priceIncreaseRequired => sellingPrice <= 0 ||
+          !requiredSellingPrice.isFinite
+      ? 0 : math.max(0, requiredSellingPrice - sellingPrice);
+  /// If current GP is above target, how much price could decrease per unit.
+  double get possiblePriceDecrease => sellingPrice <= 0 ||
+          !requiredSellingPrice.isFinite
+      ? 0 : math.max(0, sellingPrice - requiredSellingPrice);
+  /// GP percentage points above or below the selected margin.
+  double get marginDifference => gpMargin - targetMargin;
   bool get targetMet => sellingPrice > 0 && gpMargin + 0.000001 >= targetMargin;
 
   Map<String, dynamic> toJson() => {
