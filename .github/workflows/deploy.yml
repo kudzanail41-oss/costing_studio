@@ -1,0 +1,59 @@
+name: Publish Costing Studio to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Get repository files
+        uses: actions/checkout@v4
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Generate Flutter web project files
+        run: |
+          flutter create . --platforms web --project-name gp_costing_studio
+          rm -f test/widget_test.dart
+
+      - name: Install Dart and Flutter dependencies
+        run: flutter pub get
+
+      - name: Run app tests
+        run: flutter test
+
+      - name: Build Flutter for this repository URL
+        run: flutter build web --release --base-href "/${{ github.event.repository.name }}/"
+
+      - name: Disable Jekyll processing
+        run: touch build/web/.nojekyll
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload web files
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+      - name: Deploy website
+        id: deploy
+        uses: actions/deploy-pages@v4
