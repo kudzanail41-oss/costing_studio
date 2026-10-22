@@ -31,6 +31,15 @@ void main() {
     expect(csv.contains('"\'+SUM(A1:A2)"'), isTrue);
     expect(CostingExport.csvBytes(p).take(3).toList(), [0xEF, 0xBB, 0xBF]);
   });
+  test('PDF cost rows contain only actual line items, no group subtotals', () {
+    final rows = CostingExport.pdfCostRows(sample());
+    expect(rows, [
+      ['Fabric', 'R50.00', 'R5,000.00'],
+      ['Labour', 'R20.00', 'R2,000.00'],
+    ]);
+    expect(rows.length, sample().costs.length);
+    expect(rows.expand((row) => row).join(' '), isNot(contains('Group subtotal')));
+  });
   test('PDF generation produces a PDF document', () async {
     final bytes = await CostingExport.pdfBytes(sample());
     expect(bytes.length, greaterThan(1000));

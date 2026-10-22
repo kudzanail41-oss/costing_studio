@@ -315,14 +315,23 @@ class _CostingHomeScreenState extends State<CostingHomeScreen> {
     );
   }
 
-  Widget _metric(String label, String value, {Color? color}) =>
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
-        const SizedBox(height: 5),
-        FittedBox(alignment: Alignment.centerLeft, fit: BoxFit.scaleDown,
-          child: Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800,
-            color: color ?? const Color(0xFF24292B)))),
-      ]);
+  /// One amount per line with a light separator: easier to scan on phones.
+  Widget _summaryLine(String label, String value, {bool prominent = false}) =>
+    Container(
+      padding: const EdgeInsets.symmetric(vertical: 11),
+      decoration: const BoxDecoration(border: Border(
+        bottom: BorderSide(color: Color(0xFFE2E5E5), width: .7))),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: Text(label, style: TextStyle(
+          fontSize: 13, color: prominent ? const Color(0xFF252B2D) :
+            const Color(0xFF5E686B),
+          fontWeight: prominent ? FontWeight.w700 : FontWeight.normal))),
+        const SizedBox(width: 12),
+        Text(value, textAlign: TextAlign.right, style: TextStyle(
+          fontSize: prominent ? 15 : 13,
+          color: const Color(0xFF252B2D), fontWeight: FontWeight.w800)),
+      ]),
+    );
 
   Widget _targetSelector(CostingProject p) {
     final choices = [30.0, 40.0, 50.0];
@@ -377,13 +386,8 @@ class _CostingHomeScreenState extends State<CostingHomeScreen> {
               title: Text(group, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
               subtitle: Text('${p.costs.where((line) => groupFor(line.name) == group).length} cost items',
                   style: const TextStyle(fontSize: 11)),
-              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                Text(rand(p.costs.where((line) => groupFor(line.name) == group)
-                    .fold<double>(0, (total, line) => total + line.unitCost)),
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
-                const SizedBox(width: 4),
-                const Icon(Icons.expand_more),
-              ]),
+              // Let ExpansionTile display its normal arrow. No category totals:
+              // overall totals are already visible in the summary below.
               children: [
                 const Divider(height: 1),
                 for (final line in p.costs.where((line) => groupFor(line.name) == group))
@@ -513,35 +517,22 @@ class _CostingHomeScreenState extends State<CostingHomeScreen> {
                 label: const Text('Add cost item'),
                 style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 48))),
             const SizedBox(height: 23),
-            _sectionHeader('Costing summary', 'Calculated automatically from your entries.'),
-            Card(child: Padding(padding: const EdgeInsets.all(18), child: Column(children: [
-              Row(children: [
-                Expanded(child: _metric('Cost per unit', rand(p.costPerUnit))),
-                const SizedBox(width: 16),
-                Expanded(child: _metric('Profit per unit', rand(p.profitPerUnit),
-                    color: p.profitPerUnit < 0 ? Colors.red.shade700 : null)),
+            _sectionHeader('Project summary', 'All totals update as you edit costs.'),
+            Card(child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 9),
+              child: Column(children: [
+                _summaryLine('Total cost per unit', rand(p.costPerUnit)),
+                _summaryLine('Total project cost', rand(p.projectCost)),
+                _summaryLine('Selling price per unit', rand(p.sellingPrice)),
+                _summaryLine('Total sales revenue', rand(p.revenue)),
+                _summaryLine('Gross profit per unit', rand(p.profitPerUnit)),
+                _summaryLine('Total gross profit', rand(p.projectProfit),
+                  prominent: true),
+                _summaryLine('Actual GP margin', marginText(p.gpMargin),
+                  prominent: true),
+                _summaryLine('Target GP margin', marginText(p.targetMargin)),
               ]),
-              const Divider(height: 28),
-              Row(children: [
-                Expanded(child: _metric('Total project cost', rand(p.projectCost))),
-                const SizedBox(width: 16),
-                Expanded(child: _metric('Sales revenue', rand(p.revenue))),
-              ]),
-              const Divider(height: 28),
-              Row(children: [
-                Expanded(child: _metric('Total gross profit', rand(p.projectProfit))),
-                const SizedBox(width: 16),
-                Expanded(child: _metric('Target maximum cost', rand(p.maximumCostForTarget))),
-              ]),
-              if (p.sellingPrice > 0 && p.costPerUnit > 0) ...[
-                const Divider(height: 28),
-                Align(alignment: Alignment.centerLeft,
-                  child: Text(p.reductionRequired > 0.005
-                      ? 'To reach the selected margin, reduce unit costs by ${rand(p.reductionRequired)} or increase unit selling price to ${rand(p.requiredSellingPrice)}.'
-                      : 'Additional cost budget available per unit while maintaining the selected margin: ${rand(p.availableCostHeadroom)}. No changes are required.',
-                    style: const TextStyle(fontSize: 12, height: 1.5))),
-              ],
-            ]))),
+            )),
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: _exporting ? null : _showExportOptions,

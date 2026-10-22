@@ -107,6 +107,22 @@ class CostingExport {
     return rows.map(_row).join('\r\n');
   }
 
+  /// Table rows for the PDF: one per cost item, without category subtotal rows.
+  /// This can be tested without reading text back from a compressed PDF.
+  static List<List<String>> pdfCostRows(CostingProject project) {
+    final rows = <List<String>>[];
+    for (final group in groupOrder) {
+      for (final line in project.costs.where((c) => groupFor(c.name) == group)) {
+        rows.add([
+          line.name,
+          money(line.unitCost),
+          money(line.unitCost * project.quantity),
+        ]);
+      }
+    }
+    return rows;
+  }
+
   static Future<Uint8List> pdfBytes(CostingProject project) async {
     final document = pw.Document(
       title: '${project.product} - Cost breakdown',
@@ -127,35 +143,27 @@ class CostingExport {
       }
     }
 
-    pw.Widget labelledValue(String label, String value) => pw.Padding(
-      padding: const pw.EdgeInsets.only(bottom: 5),
-      child: pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-        pw.Expanded(flex: 5, child: pw.Text(label,
-          style: const pw.TextStyle(fontSize: 9, color: muted))),
-        pw.Expanded(flex: 4, child: pw.Text(value, textAlign: pw.TextAlign.right,
-          style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: charcoal))),
-      ]),
-    );
+    final tableData = pdfCostRows(project);
 
-    final tableData = <List<String>>[];
-    for (final group in groupOrder) {
-      final lines = project.costs.where((c) => groupFor(c.name) == group).toList();
-      if (lines.isEmpty) continue;
-      for (final line in lines) {
-        tableData.add([
-          group,
-          line.name,
-          money(line.unitCost),
-          money(line.unitCost * project.quantity),
-        ]);
-      }
-      tableData.add([
-        group,
-        'Group subtotal',
-        money(lines.fold<double>(0, (sum, l) => sum + l.unitCost)),
-        money(lines.fold<double>(0, (sum, l) => sum + l.unitCost) * project.quantity),
-      ]);
-    }
+    // A light rule between each summary line helps readers follow amounts
+    // without inserting extra categories, subtotals or zero-value advice.
+    pw.Widget summaryRow(String label, String value, {bool prominent = false}) =>
+      pw.Container(
+        padding: const pw.EdgeInsets.symmetric(vertical: 6),
+        decoration: const pw.BoxDecoration(
+          border: pw.Border(bottom: pw.BorderSide(
+            color: PdfColors.grey300, width: .45)),
+        ),
+        child: pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+          pw.Expanded(flex: 5, child: pw.Text(label,
+            style: pw.TextStyle(fontSize: 9, color: prominent ? charcoal : muted,
+              fontWeight: prominent ? pw.FontWeight.bold : pw.FontWeight.normal))),
+          pw.Expanded(flex: 4, child: pw.Text(value,
+            textAlign: pw.TextAlign.right,
+            style: pw.TextStyle(fontSize: prominent ? 10 : 9,
+              fontWeight: pw.FontWeight.bold, color: charcoal))),
+        ]),
+      );
 
     document.addPage(pw.MultiPage(
       maxPages: 100,
@@ -213,18 +221,25 @@ class CostingExport {
             ),
           ],
         ]),
-        pw.SizedBox(height: 19),
+        pw.SizedBox(height: 15),
         pw.Container(
-          padding: const pw.EdgeInsets.all(14),
+          padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 11),
           color: light,
-          child: pw.Column(children: [
-            labelledValue('Quantity', project.quantity.toString()),
-            labelledValue('Selling price per unit', money(project.sellingPrice)),
-            labelledValue('Target gross profit margin', _percentage(project.targetMargin)),
-            labelledValue('Actual gross profit margin', _percentage(project.gpMargin)),
+          child: pw.Row(children: [
+            pw.Expanded(child: pw.Text('Quantity  ${project.quantity}',
+              style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold,
+                color: charcoal))),
+            pw.Expanded(child: pw.Text('Selling / unit  ${money(project.sellingPrice)}',
+              textAlign: pw.TextAlign.center,
+              style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold,
+                color: charcoal))),
+            pw.Expanded(child: pw.Text('Target GP  ${_percentage(project.targetMargin)}',
+              textAlign: pw.TextAlign.right,
+              style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold,
+                color: charcoal))),
           ]),
         ),
-        pw.SizedBox(height: 20),
+        pw.SizedBox(height: 15),
         pw.Text('DETAILED COSTS', style: pw.TextStyle(
           fontSize: 12, fontWeight: pw.FontWeight.bold, color: charcoal)),
         pw.SizedBox(height: 8),
@@ -233,7 +248,7 @@ class CostingExport {
               style: const pw.TextStyle(fontSize: 10, color: muted))
         else
           pw.Table.fromTextArray(
-            headers: ['Category', 'Cost item', 'Cost / unit', 'Total for project'],
+            headers: ['Cost item', 'Cost / unit', 'Total for project'],
             data: tableData,
             border: pw.TableBorder(
               horizontalInside: const pw.BorderSide(color: PdfColors.grey300, width: .35),
@@ -243,52 +258,89 @@ class CostingExport {
             headerStyle: pw.TextStyle(color: PdfColors.white,
                 fontSize: 9, fontWeight: pw.FontWeight.bold),
             cellStyle: const pw.TextStyle(fontSize: 8.5, color: charcoal),
-            cellPadding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-            headerPadding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+            cellPadding: const pw.EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+            headerPadding: const pw.EdgeInsets.symmetric(horizontal: 9, vertical: 9),
             columnWidths: {
-              0: const pw.FlexColumnWidth(2),
-              1: const pw.FlexColumnWidth(2.4),
-              2: const pw.FlexColumnWidth(1.4),
-              3: const pw.FlexColumnWidth(2),
+              0: const pw.FlexColumnWidth(4),
+              1: const pw.FlexColumnWidth(1.5),
+              2: const pw.FlexColumnWidth(2.2),
             },
             cellAlignments: {
+              1: pw.Alignment.centerRight,
               2: pw.Alignment.centerRight,
-              3: pw.Alignment.centerRight,
             },
           ),
-        pw.SizedBox(height: 23),
+        if (tableData.isNotEmpty)
+          pw.Container(
+            padding: const pw.EdgeInsets.symmetric(horizontal: 9, vertical: 9),
+            color: light,
+            child: pw.Row(children: [
+              pw.Expanded(flex: 40, child: pw.Text('TOTAL COST',
+                style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold,
+                  color: charcoal))),
+              pw.Expanded(flex: 15, child: pw.Text(money(project.costPerUnit),
+                textAlign: pw.TextAlign.right,
+                style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold,
+                  color: charcoal))),
+              pw.Expanded(flex: 22, child: pw.Text(money(project.projectCost),
+                textAlign: pw.TextAlign.right,
+                style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold,
+                  color: charcoal))),
+            ]),
+          ),
+        pw.SizedBox(height: 17),
         pw.Container(
-          padding: const pw.EdgeInsets.all(16),
+          padding: const pw.EdgeInsets.fromLTRB(14, 12, 14, 12),
           decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: PdfColors.grey300)),
+            border: pw.Border.all(color: PdfColors.grey300, width: .8)),
           child: pw.Column(children: [
             pw.Text('PROJECT SUMMARY',
-              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12, color: charcoal)),
-            pw.SizedBox(height: 12),
-            labelledValue('Total cost per unit', money(project.costPerUnit)),
-            labelledValue('Total project cost', money(project.projectCost)),
-            labelledValue('Selling price per unit', money(project.sellingPrice)),
-            labelledValue('Total sales revenue', money(project.revenue)),
-            labelledValue('Gross profit per unit', money(project.profitPerUnit)),
-            labelledValue('Total gross profit', money(project.projectProfit)),
-            pw.Divider(color: PdfColors.grey300),
-            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-              pw.Text('ACTUAL GP MARGIN', style: pw.TextStyle(
-                color: charcoal, fontSize: 12, fontWeight: pw.FontWeight.bold)),
-              pw.Text(_percentage(project.gpMargin), style: pw.TextStyle(
-                color: project.targetMet ? green : charcoal,
-                fontSize: 16, fontWeight: pw.FontWeight.bold)),
-            ]),
-            pw.SizedBox(height: 6),
-            labelledValue('Target GP margin', _percentage(project.targetMargin)),
-            labelledValue('Target achieved', project.targetMet ? 'Yes' : 'No'),
-            labelledValue('Maximum unit cost at target', money(project.maximumCostForTarget)),
-            labelledValue('Cost reduction required per unit', money(project.reductionRequired)),
-            labelledValue('Additional cost allowance per unit', money(project.availableCostHeadroom)),
-            labelledValue('Additional project cost allowance', money(project.availableProjectHeadroom)),
-            labelledValue('Required selling price at target',
-                project.requiredSellingPrice.isFinite
-                    ? money(project.requiredSellingPrice) : 'N/A'),
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold,
+                fontSize: 12, color: charcoal)),
+            pw.SizedBox(height: 8),
+            summaryRow('Total cost per unit', money(project.costPerUnit)),
+            summaryRow('Total project cost', money(project.projectCost)),
+            summaryRow('Selling price per unit', money(project.sellingPrice)),
+            summaryRow('Total sales revenue', money(project.revenue)),
+            summaryRow('Gross profit per unit', money(project.profitPerUnit)),
+            summaryRow('Total gross profit', money(project.projectProfit),
+              prominent: true),
+            pw.SizedBox(height: 10),
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+              color: light,
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('ACTUAL GP MARGIN', style: pw.TextStyle(
+                    fontSize: 11, fontWeight: pw.FontWeight.bold, color: charcoal)),
+                  pw.Text(_percentage(project.gpMargin), style: pw.TextStyle(
+                    fontSize: 15, fontWeight: pw.FontWeight.bold,
+                    color: project.targetMet ? green : charcoal)),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 3),
+            summaryRow('Target GP margin', _percentage(project.targetMargin)),
+            summaryRow('Target achieved', project.targetMet ? 'Yes' : 'No'),
+            if (project.sellingPrice > 0 && project.costs.isNotEmpty) ...[
+              summaryRow('Maximum unit cost at target',
+                money(project.maximumCostForTarget)),
+              if (project.reductionRequired > 0.005) ...[
+                summaryRow('Cost reduction required per unit',
+                  money(project.reductionRequired), prominent: true),
+                summaryRow('Total project cost reduction required',
+                  money(project.projectReductionRequired)),
+                if (project.requiredSellingPrice.isFinite)
+                  summaryRow('Alternative selling price at target',
+                    money(project.requiredSellingPrice)),
+              ] else if (project.availableCostHeadroom > 0.005) ...[
+                summaryRow('Additional cost allowance per unit',
+                  money(project.availableCostHeadroom)),
+                summaryRow('Additional total project cost allowance',
+                  money(project.availableProjectHeadroom)),
+              ],
+            ],
           ]),
         ),
         pw.SizedBox(height: 13),
